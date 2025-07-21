@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGIS Landing Page</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        /* Custom animations and transitions */
+        .fade-in {
+            animation: fadeIn 0.6s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hover-scale {
+            transition: transform 0.3s ease;
+        }
+
+        .hover-scale:hover {
+            transform: scale(1.05);
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 50%, #f0fdfa 100%);
+        }
+
+        .blur-bg {
+            backdrop-filter: blur(10px);
+        }
+
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #3b82f6;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #2563eb;
+        }
+
+        /* Map styles */
+        .map-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1000;
+            background: white;
+        }
+
+        .map-container.active {
+            display: block;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+
+        .sidebar {
+            position: absolute;
+            top: 80px;
+            left: 20px;
+            width: 300px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1001;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+
+        .feature-popup {
+            display: none;
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            width: 400px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1002;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+
+        .feature-popup.active {
+            display: block;
+        }
+
+        .blinking {
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            50% {
+                opacity: 1;
+            }
+
+            51%,
+            100% {
+                opacity: 0.3;
+            }
+        }
+
+        .highlighted {
+            animation: highlight 0.5s ease-in-out 3;
+        }
+
+        @keyframes highlight {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.7;
+                transform: scale(1.05);
+            }
+        }
+
+        .map-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 1003;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .layer-button {
+            transition: all 0.3s ease;
+        }
+
+        .layer-button.active {
+            transform: scale(0.95);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Popup styling */
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+            max-width: 300px;
+        }
+
+        .leaflet-popup-content {
+            margin: 10px;
+            font-size: 14px;
+        }
+
+        .leaflet-popup-content h4 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #1e40af;
+        }
+
+        .leaflet-popup-content p {
+            margin: 4px 0;
+        }
+
+        .leaflet-popup-tip-container {
+            display: none;
+        }
+
+        .blink-red {
+            animation: blink-red 0.6s linear infinite;
+        }
+
+        @keyframes blink-red {
+
+            0%,
+            100% {
+                stroke: red;
+                stroke-width: 4;
+            }
+
+            50% {
+                stroke: transparent;
+                stroke-width: 4;
+            }
+        }
+
+        .blink-red {
+            animation: blinkRed 0.6s ease-in-out infinite alternate;
+        }
+
+        @keyframes blinkRed {
+            0% {
+                stroke: red;
+                stroke-width: 5;
+            }
+
+            100% {
+                stroke: rgba(255, 0, 0, 0.1);
+                stroke-width: 1;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-white">
+    <header id="header"
+        class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-white/40 backdrop-blur-sm">
+        <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-2">
+                    <svg class="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7">
+                        </path>
+                    </svg>
+                    <span class="text-xl font-bold text-gray-900">WebGIS</span>
+                </div>
+                <div class="hidden md:flex items-center space-x-8">
+                    <button onclick="scrollToSection('profil')"
+                        class="nav-item px-3 py-2 rounded-md text-sm font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Profil</button>
+                    <button onclick="scrollToSection('sejarah')"
+                        class="nav-item px-3 py-2 rounded-md text-sm font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Sejarah</button>
+                    <button onclick="scrollToSection('wilayah')"
+                        class="nav-item px-3 py-2 rounded-md text-sm font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Wilayah</button>
+                    <button onclick="scrollToSection('penduduk')"
+                        class="nav-item px-3 py-2 rounded-md text-sm font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Penduduk</button>
+                    <button onclick="scrollToSection('potensi')"
+                        class="nav-item px-3 py-2 rounded-md text-sm font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Potensi
+                        Alam</button>
+                    <button onclick="scrollToSection('budaya')"
+                        class="nav-item px-3 py-2 rounded-md text-sm font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Budaya
+                        Lokal</button>
+                    <button onclick="scrollToSection('kesimpulan')"
+                        class="nav-item px-3 py-2 rounded-md text-sm font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Kesimpulan</button>
+                    <button onclick="scrollToSection('dokumentasi')"
+                        class="nav-item px-3 py-2 rounded-md text-sm font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Dokumentasi</button>
+                </div>
+                <div class="md:hidden">
+                    <button id="mobile-menu-btn"
+                        class="inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500">
+                        <svg id="menu-icon" class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                        <svg id="close-icon" class="h-6 w-6 hidden" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div id="mobile-menu" class="md:hidden border-t border-gray-200 hidden">
+                <div class="px-2 pt-2 pb-3 space-y-1 bg-white">
+                    <button onclick="scrollToSection('profil')"
+                        class="mobile-nav-item block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Profil</button>
+                    <button onclick="scrollToSection('sejarah')"
+                        class="mobile-nav-item block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Sejarah</button>
+                    <button onclick="scrollToSection('wilayah')"
+                        class="mobile-nav-item block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Wilayah</button>
+                    <button onclick="scrollToSection('penduduk')"
+                        class="mobile-nav-item block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Penduduk</button>
+                    <button onclick="scrollToSection('potensi')"
+                        class="mobile-nav-item block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Potensi
+                        Alam</button>
+                    <button onclick="scrollToSection('budaya')"
+                        class="mobile-nav-item block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Budaya
+                        Lokal</button>
+                    <button onclick="scrollToSection('kesimpulan')"
+                        class="mobile-nav-item block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Kesimpulan</button>
+                    <button onclick="scrollToSection('dokumentasi')"
+                        class="mobile-nav-item block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors text-gray-700 hover:text-blue-600 hover:bg-gray-50">Dokumentasi</button>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <section class="relative min-h-screen flex items-center justify-center">
+    <!-- Video Background -->
+    <div class="absolute inset-0 z-0 overflow-hidden">
+        <video 
+            class="absolute inset-0 w-full h-full object-cover"
+            autoplay 
+            muted 
+            loop 
+            playsinline
+            style="filter: brightness(0.6);">
+            <source src="video\DJI_20250716160609_0198_D (2) (1) (1).mp4" type="video/mp4">
+            <!-- Fallback jika video tidak bisa dimuat -->
+            <div class="absolute inset-0 bg-gradient-to-br from-blue-500 to-teal-500"></div>
+        </video>
+    </div>
+    
+    <!-- Decorative elements -->
+    <div class="absolute inset-0 z-10 opacity-20">
+        <div class="absolute top-10 left-10 w-32 h-32 bg-blue-500 rounded-full filter blur-3xl"></div>
+        <div class="absolute bottom-10 right-10 w-40 h-40 bg-teal-500 rounded-full filter blur-3xl"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-orange-500 rounded-full filter blur-3xl"></div>
+    </div>
+    
+    <!-- Content -->
+    <div class="relative z-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div class="mb-8 fade-in">
+            <svg class="h-24 w-24 mx-auto text-white mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                    </path>
+                </svg>
+                <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">
+                    Sistem Informasi
+                    <span class="block text-white mt-2">Geografis</span>
+                </h1>
+                <p class="text-xl sm:text-2xl text-white mb-8 max-w-3xl mx-auto">
+                    Eksplorasi data geografis dan informasi wilayah secara komprehensif melalui platform WebGIS yang
+                    modern dan interaktif
+                </p>
+                <button onclick="openMap()"
+                    class="inline-flex items-center px-8 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-lg hover:shadow-xl">
+                    Mulai Eksplorasi
+                </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16">
+                <div
+                    class="bg-white/30 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 hover-scale">
+                    <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z">
+                        </path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <h3 class="text-xl font-semibold text-white mb-2">Pemetaan Wilayah</h3>
+                    <p class="text-white">Data geografis dan pemetaan wilayah yang akurat dan terkini</p>
+                </div>
+                <div
+                    class="bg-white/30 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 hover-scale">
+                    <svg class="h-12 w-12 text-teal-600 mx-auto mb-4" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z">
+                        </path>
+                    </svg>
+                    <h3 class="text-xl font-semibold text-white mb-2">Data Penduduk</h3>
+                    <p class="text-white">Informasi demografis dan statistik kependudukan</p>
+                </div>
+                <div
+                    class="bg-white/30 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 hover-scale">
+                    <svg class="h-12 w-12 text-orange-600 mx-auto mb-4" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+                    <h3 class="text-xl font-semibold text-white mb-2">Potensi Daerah</h3>
+                    <p class="text-white">Analisis potensi alam dan sumber daya daerah</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+    <section id="profil" class="py-16 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+                <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Profil</h2>
+                <div class="w-24 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mx-auto"></div>
+            </div>
+            <div class="flex flex-col lg:flex-row items-center gap-8 lg:gap-12 mb-12">
+                <div class="lg:w-1/2">
+                    <div
+                        class="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <img src="https://images.pexels.com/photos/3935702/pexels-photo-3935702.jpeg?auto=compress&cs=tinysrgb&w=800"
+                            alt="Profil Wilayah" class="w-full h-64 lg:h-80 object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                    </div>
+                </div>
+                <div class="lg:w-1/2">
+                    <div
+                        class="bg-white rounded-xl p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <h3 class="text-2xl lg:text-3xl font-bold text-gray-900 mb-4">Profil Wilayah</h3>
+                        <div class="w-16 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mb-6"></div>
+                        <p class="text-gray-600 leading-relaxed text-lg">Wilayah ini merupakan daerah yang memiliki
+                            karakteristik geografis yang unik dengan berbagai potensi yang dapat dikembangkan. Terletak
+                            di lokasi strategis dengan akses yang mudah ke berbagai fasilitas publik dan infrastruktur
+                            yang mendukung. Profil wilayah ini mencakup berbagai aspek mulai dari kondisi geografis,
+                            topografi, hingga kondisi sosial ekonomi masyarakat setempat.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section id="sejarah" class="py-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Sejarah</h2>
+                <div class="w-24 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mx-auto"></div>
+            </div>
+            <div class="flex flex-col lg:flex-row-reverse items-center gap-8 lg:gap-12 mb-12">
+                <div class="lg:w-1/2">
+                    <div
+                        class="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <img src="https://images.pexels.com/photos/4905881/pexels-photo-4905881.jpeg?auto=compress&cs=tinysrgb&w=800"
+                            alt="Sejarah Wilayah" class="w-full h-64 lg:h-80 object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                    </div>
+                </div>
+                <div class="lg:w-1/2">
+                    <div
+                        class="bg-white rounded-xl p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <h3 class="text-2xl lg:text-3xl font-bold text-gray-900 mb-4">Sejarah dan Perkembangan</h3>
+                        <div class="w-16 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mb-6"></div>
+                        <p class="text-gray-600 leading-relaxed text-lg">Sejarah wilayah ini dimulai dari zaman kolonial
+                            hingga era modern saat ini. Perkembangan wilayah ini tidak terlepas dari peran masyarakat
+                            lokal yang telah turun temurun mengelola dan mengembangkan daerah ini. Berbagai peristiwa
+                            bersejarah telah membentuk karakter dan identitas wilayah ini, mulai dari periode
+                            pra-kemerdekaan hingga era reformasi yang membawa perubahan signifikan dalam tata kelola dan
+                            pembangunan daerah.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section id="wilayah" class="py-16 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7">
+                    </path>
+                </svg>
+                <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Wilayah</h2>
+                <div class="w-24 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mx-auto"></div>
+            </div>
+            <div class="flex flex-col lg:flex-row items-center gap-8 lg:gap-12 mb-12">
+                <div class="lg:w-1/2">
+                    <div
+                        class="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <img src="https://images.pexels.com/photos/3935339/pexels-photo-3935339.jpeg?auto=compress&cs=tinysrgb&w=800"
+                            alt="Peta Wilayah" class="w-full h-64 lg:h-80 object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                    </div>
+                </div>
+                <div class="lg:w-1/2">
+                    <div
+                        class="bg-white rounded-xl p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <h3 class="text-2xl lg:text-3xl font-bold text-gray-900 mb-4">Kondisi Geografis dan Wilayah</h3>
+                        <div class="w-16 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mb-6"></div>
+                        <p class="text-gray-600 leading-relaxed text-lg">Wilayah ini memiliki luas total sekitar X km²
+                            dengan topografi yang beragam, mulai dari dataran rendah hingga perbukitan. Kondisi
+                            geografis yang strategis membuat wilayah ini menjadi pusat aktivitas ekonomi dan sosial.
+                            Batas wilayah meliputi berbagai kecamatan dan desa dengan karakteristik yang berbeda-beda.
+                            Infrastruktur transportasi yang memadai menghubungkan wilayah ini dengan daerah lain,
+                            sehingga memudahkan mobilitas penduduk dan distribusi barang.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section id="penduduk" class="py-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z">
+                    </path>
+                </svg>
+                <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Penduduk</h2>
+                <div class="w-24 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mx-auto"></div>
+            </div>
+            <div class="flex flex-col lg:flex-row-reverse items-center gap-8 lg:gap-12 mb-12">
+                <div class="lg:w-1/2">
+                    <div
+                        class="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <img src="https://images.pexels.com/photos/3184292/pexels-photo-3184292.jpeg?auto=compress&cs=tinysrgb&w=800"
+                            alt="Penduduk" class="w-full h-64 lg:h-80 object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                    </div>
+                </div>
+                <div class="lg:w-1/2">
+                    <div
+                        class="bg-white rounded-xl p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <h3 class="text-2xl lg:text-3xl font-bold text-gray-900 mb-4">Demografi dan Kependudukan</h3>
+                        <div class="w-16 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mb-6"></div>
+                        <p class="text-gray-600 leading-relaxed text-lg">Jumlah penduduk wilayah ini mencapai sekitar X
+                            jiwa dengan tingkat pertumbuhan yang stabil. Komposisi penduduk terdiri dari berbagai
+                            kelompok usia dengan mayoritas berada pada usia produktif. Tingkat pendidikan masyarakat
+                            terus meningkat seiring dengan perbaikan fasilitas pendidikan. Mata pencaharian penduduk
+                            sangat beragam, mulai dari pertanian, perdagangan, hingga sektor jasa. Kepadatan penduduk
+                            yang optimal mendukung terciptanya dinamika sosial yang sehat.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section id="potensi" class="py-16 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z">
+                    </path>
+                </svg>
+                <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Potensi Alam</h2>
+                <div class="w-24 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mx-auto"></div>
+            </div>
+            <div class="flex flex-col lg:flex-row items-center gap-8 lg:gap-12 mb-12">
+                <div class="lg:w-1/2">
+                    <div
+                        class="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <img src="https://images.pexels.com/photos/3935707/pexels-photo-3935707.jpeg?auto=compress&cs=tinysrgb&w=800"
+                            alt="Potensi Alam" class="w-full h-64 lg:h-80 object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                    </div>
+                </div>
+                <div class="lg:w-1/2">
+                    <div
+                        class="bg-white rounded-xl p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <h3 class="text-2xl lg:text-3xl font-bold text-gray-900 mb-4">Kekayaan Sumber Daya Alam</h3>
+                        <div class="w-16 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mb-6"></div>
+                        <p class="text-gray-600 leading-relaxed text-lg">Potensi alam yang dimiliki wilayah ini sangat
+                            beragam dan melimpah. Sumber daya pertanian yang subur mendukung produktivitas pangan yang
+                            tinggi. Hutan dan area konservasi menjadi paru-paru hijau yang penting bagi ekosistem.
+                            Potensi wisata alam yang eksotis menarik banyak pengunjung dari berbagai daerah. Sumber air
+                            yang melimpah mendukung berbagai aktivitas ekonomi dan kehidupan sehari-hari masyarakat.
+                            Pengelolaan yang berkelanjutan menjadi kunci untuk mempertahankan kelestarian alam.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section id="budaya" class="py-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z">
+                    </path>
+                </svg>
+                <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Budaya Lokal</h2>
+                <div class="w-24 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mx-auto"></div>
+            </div>
+            <div class="flex flex-col lg:flex-row-reverse items-center gap-8 lg:gap-12 mb-12">
+                <div class="lg:w-1/2">
+                    <div
+                        class="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <img src="https://images.pexels.com/photos/3935703/pexels-photo-3935703.jpeg?auto=compress&cs=tinysrgb&w=800"
+                            alt="Budaya Lokal" class="w-full h-64 lg:h-80 object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                    </div>
+                </div>
+                <div class="lg:w-1/2">
+                    <div
+                        class="bg-white rounded-xl p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <h3 class="text-2xl lg:text-3xl font-bold text-gray-900 mb-4">Kearifan dan Tradisi Lokal</h3>
+                        <div class="w-16 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mb-6"></div>
+                        <p class="text-gray-600 leading-relaxed text-lg">Budaya lokal yang kaya menjadi identitas unik
+                            wilayah ini. Tradisi turun temurun masih dijaga dan dilestarikan oleh masyarakat setempat.
+                            Berbagai festival dan acara budaya rutin diselenggarakan untuk memperkuat ikatan sosial.
+                            Kerajinan tangan dan seni lokal menjadi kebanggaan masyarakat serta potensi ekonomi kreatif.
+                            Bahasa daerah dan adat istiadat masih dipraktikkan dalam kehidupan sehari-hari. Nilai-nilai
+                            kearifan lokal menjadi pedoman dalam pengambilan keputusan dan penyelesaian masalah.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section id="kesimpulan" class="py-16 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                    </path>
+                </svg>
+                <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Kesimpulan dan Rekomendasi</h2>
+                <div class="w-24 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mx-auto"></div>
+            </div>
+            <div class="bg-white rounded-xl p-8 shadow-lg">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-2xl font-bold text-gray-900 mb-4">Kesimpulan</h3>
+                        <div class="w-16 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mb-6"></div>
+                        <p class="text-gray-600 leading-relaxed mb-6">
+                            Berdasarkan analisis komprehensif yang telah dilakukan, wilayah ini memiliki potensi yang
+                            sangat besar untuk dikembangkan. Kombinasi antara sumber daya alam yang melimpah, sumber
+                            daya manusia yang berkualitas, dan budaya lokal yang kaya menciptakan fondasi yang kuat
+                            untuk pembangunan berkelanjutan.
+                        </p>
+                        <p class="text-gray-600 leading-relaxed">
+                            Tantangan utama yang dihadapi meliputi optimalisasi pemanfaatan sumber daya, peningkatan
+                            infrastruktur, dan pelestarian lingkungan. Dengan pengelolaan yang tepat, wilayah ini dapat
+                            menjadi contoh pengembangan daerah yang berkelanjutan dan inklusif.
+                        </p>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold text-gray-900 mb-4">Rekomendasi</h3>
+                        <div class="w-16 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mb-6"></div>
+                        <ul class="space-y-4 text-gray-600">
+                            <li class="flex items-start space-x-2">
+                                <span class="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></span>
+                                <span>Pengembangan infrastruktur transportasi dan komunikasi untuk mendukung
+                                    konektivitas</span>
+                            </li>
+                            <li class="flex items-start space-x-2">
+                                <span class="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></span>
+                                <span>Peningkatan kualitas sumber daya manusia melalui program pendidikan dan
+                                    pelatihan</span>
+                            </li>
+                            <li class="flex items-start space-x-2">
+                                <span class="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></span>
+                                <span>Pengembangan sektor pariwisata yang berkelanjutan dengan tetap menjaga kelestarian
+                                    alam</span>
+                            </li>
+                            <li class="flex items-start space-x-2">
+                                <span class="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></span>
+                                <span>Penguatan ekonomi lokal melalui pengembangan UMKM dan industri kreatif</span>
+                            </li>
+                            <li class="flex items-start space-x-2">
+                                <span class="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></span>
+                                <span>Implementasi sistem informasi geografis yang terintegrasi untuk perencanaan
+                                    pembangunan</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section id="dokumentasi" class="py-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <svg class="h-12 w-12 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                    </path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Dokumentasi</h2>
+                <div class="w-24 h-1 bg-gradient-to-r from-blue-600 to-teal-600 mx-auto"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div
+                    class="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 hover-scale">
+                    <div class="h-48 bg-gray-100 flex items-center justify-center">
+                        <div class="text-center">
+                            <svg class="h-12 w-12 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                                </path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <p class="text-gray-500 text-sm">Dokumentasi 1</p>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <h4 class="font-semibold text-gray-900 mb-2">Dokumentasi 1</h4>
+                        <p class="text-gray-600 text-sm">Deskripsi dokumentasi akan ditambahkan di sini. Gambar dan
+                            informasi detail akan dimasukkan sesuai kebutuhan.</p>
+                    </div>
+                </div>
+                <div
+                    class="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 hover-scale">
+                    <div class="h-48 bg-gray-100 flex items-center justify-center">
+                        <div class="text-center">
+                            <svg class="h-12 w-12 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                                </path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <p class="text-gray-500 text-sm">Dokumentasi 2</p>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <h4 class="font-semibold text-gray-900 mb-2">Dokumentasi 2</h4>
+                        <p class="text-gray-600 text-sm">Deskripsi dokumentasi akan ditambahkan di sini. Gambar dan
+                            informasi detail akan dimasukkan sesuai kebutuhan.</p>
+                    </div>
+                </div>
+                <div
+                    class="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 hover-scale">
+                    <div class="h-48 bg-gray-100 flex items-center justify-center">
+                        <div class="text-center">
+                            <svg class="h-12 w-12 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                                </path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <p class="text-gray-500 text-sm">Dokumentasi 3</p>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <h4 class="font-semibold text-gray-900 mb-2">Dokumentasi 3</h4>
+                        <p class="text-gray-600 text-sm">Deskripsi dokumentasi akan ditambahkan di sini. Gambar dan
+                            informasi detail akan dimasukkan sesuai kebutuhan.</p>
+                    </div>
+                </div>
+                <div
+                    class="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 hover-scale">
+                    <div class="h-48 bg-gray-100 flex items-center justify-center">
+                        <div class="text-center">
+                            <svg class="h-12 w-12 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                                </path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <p class="text-gray-500 text-sm">Dokumentasi 4</p>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <h4 class="font-semibold text-gray-900 mb-2">Dokumentasi 4</h4>
+                        <p class="text-gray-600 text-sm">Deskripsi dokumentasi akan ditambahkan di sini. Gambar dan
+                            informasi detail akan dimasukkan sesuai kebutuhan.</p>
+                    </div>
+                </div>
+                <div
+                    class="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 hover-scale">
+                    <div class="h-48 bg-gray-100 flex items-center justify-center">
+                        <div class="text-center">
+                            <svg class="h-12 w-12 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                                </path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <p class="text-gray-500 text-sm">Dokumentasi 5</p>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <h4 class="font-semibold text-gray-900 mb-2">Dokumentasi 5</h4>
+                        <p class="text-gray-600 text-sm">Deskripsi dokumentasi akan ditambahkan di sini. Gambar dan
+                            informasi detail akan dimasukkan sesuai kebutuhan.</p>
+                    </div>
+                </div>
+                <div
+                    class="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 hover-scale">
+                    <div class="h-48 bg-gray-100 flex items-center justify-center">
+                        <div class="text-center">
+                            <svg class="h-12 w-12 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                                </path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <p class="text-gray-500 text-sm">Dokumentasi 6</p>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <h4 class="font-semibold text-gray-900 mb-2">Dokumentasi 6</h4>
+                        <p class="text-gray-600 text-sm">Deskripsi dokumentasi akan ditambahkan di sini. Gambar dan
+                            informasi detail akan dimasukkan sesuai kebutuhan.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <footer class="bg-gray-900 text-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div class="col-span-1 md:col-span-2">
+                    <div class="flex items-center space-x-2 mb-4">
+                        <svg class="h-8 w-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7">
+                            </path>
+                        </svg>
+                        <span class="text-xl font-bold">WebGIS</span>
+                    </div>
+                    <p class="text-gray-400 mb-4 max-w-md">
+                        Sistem Informasi Geografis yang menyediakan data dan analisis komprehensif
+                        tentang wilayah, penduduk, dan potensi daerah.
+                    </p>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Menu</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#profil" class="text-gray-400 hover:text-white transition-colors">Profil</a></li>
+                        <li><a href="#sejarah" class="text-gray-400 hover:text-white transition-colors">Sejarah</a></li>
+                        <li><a href="#wilayah" class="text-gray-400 hover:text-white transition-colors">Wilayah</a></li>
+                        <li><a href="#penduduk" class="text-gray-400 hover:text-white transition-colors">Penduduk</a>
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Kontak</h3>
+                    <div class="space-y-2">
+                        <div class="flex items-center space-x-2">
+                            <svg class="h-4 w-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z">
+                                </path>
+                            </svg>
+                            <span class="text-gray-400 text-sm">info@webgis.com</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <svg class="h-4 w-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z">
+                                </path>
+                            </svg>
+                            <span class="text-gray-400 text-sm">+62 123 456 7890</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <svg class="h-4 w-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z">
+                                </path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <span class="text-gray-400 text-sm">Indonesia</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="border-t border-gray-800 mt-8 pt-8 text-center">
+                <p class="text-gray-400 text-sm">
+                    © 2024 WebGIS. Semua hak dilindungi undang-undang.
+                </p>
+            </div>
+        </div>
+    </footer>
+    <div id="mapContainer" class="map-container">
+        <div class="map-header">
+            <div class="flex items-center space-x-2">
+                <svg class="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7">
+                    </path>
+                </svg>
+                <span class="text-xl font-bold text-gray-900">WebGIS - Peta Interaktif Yogyakarta</span>
+            </div>
+            <button onclick="closeMap()"
+                class="ml-auto bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors">
+                Kembali ke Landing Page
+            </button>
+        </div>
+        <div id="map"></div>
+        <div class="sidebar">
+            <div class="p-4 border-b">
+                <h3 class="text-lg font-bold text-gray-900">Layer Peta</h3>
+                <p class="text-sm text-gray-600">Pilih layer untuk ditampilkan</p>
+            </div>
+            <div class="p-4 space-y-3">
+                <button id="polygonBtn" onclick="toggleLayer('polygon')"
+                    class="layer-button w-full bg-green-500 text-white px-4 py-3 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center space-x-2">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+                        </path>
+                    </svg>
+                    <span>Penggunaan Lahan (Polygon)</span>
+                </button>
+                <button id="polylineBtn" onclick="toggleLayer('polyline')"
+                    class="layer-button w-full bg-blue-500 text-white px-4 py-3 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <span>Jalan (Polyline)</span>
+                </button>
+                <button id="pointBtn" onclick="toggleLayer('point')"
+                    class="layer-button w-full bg-orange-500 text-white px-4 py-3 rounded-lg hover:bg-orange-600 transition-colors flex items-center justify-center space-x-2">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z">
+                        </path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <span>Titik Penting (Point)</span>
+                </button>
+            </div>
+        </div>
+        <div id="featurePopup" class="feature-popup">
+            <div class="p-4 border-b bg-gray-50">
+                <div class="flex justify-between items-center">
+                    <h3 id="popupTitle" class="text-lg font-bold text-gray-900"></h3>
+                    <button onclick="closeFeaturePopup()" class="text-gray-500 hover:text-gray-700">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="p-4">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b">
+                                <th class="text-left py-2">No</th>
+                                <th class="text-left py-2">Nama</th>
+                                <th class="text-left py-2">Jenis</th>
+                                <th class="text-left py-2">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="featureTableBody">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Navigation functionality
+        let activeSection = 'profil';
+        let isMenuOpen = false;
+        // Scroll tracking
+        function handleScroll() {
+            const sections = [
+                'profil', 'sejarah', 'wilayah', 'penduduk',
+                'potensi', 'budaya', 'kesimpulan', 'dokumentasi'
+            ];
+            const scrollPosition = window.scrollY + 100;
+            for (let i = sections.length - 1; i >= 0; i--) {
+                const element = document.getElementById(sections[i]);
+                if (element && element.offsetTop <= scrollPosition) {
+                    setActiveSection(sections[i]);
+                    break;
+                }
+            }
+            // Header background on scroll
+            const header = document.getElementById('header');
+            if (window.scrollY > 50) {
+                header.classList.add('bg-white', 'shadow-lg');
+                header.classList.remove('bg-white/90');
+            } else {
+                header.classList.remove('bg-white', 'shadow-lg');
+                header.classList.add('bg-white/90');
+            }
+        }
+        // Set active section
+        function setActiveSection(sectionId) {
+            activeSection = sectionId;
+            // Update desktop nav
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('text-blue-600', 'bg-blue-50');
+                item.classList.add('text-gray-700');
+            });
+            // Update mobile nav
+            document.querySelectorAll('.mobile-nav-item').forEach(item => {
+                item.classList.remove('text-blue-600', 'bg-blue-50');
+                item.classList.add('text-gray-700');
+            });
+            // Set active styles
+            const activeDesktopItem = document.querySelector(`button[onclick="scrollToSection('${sectionId}')"].nav-item`);
+            const activeMobileItem = document.querySelector(`button[onclick="scrollToSection('${sectionId}')"].mobile-nav-item`);
+            if (activeDesktopItem) {
+                activeDesktopItem.classList.add('text-blue-600', 'bg-blue-50');
+                activeDesktopItem.classList.remove('text-gray-700');
+            }
+            if (activeMobileItem) {
+                activeMobileItem.classList.add('text-blue-600', 'bg-blue-50');
+                activeMobileItem.classList.remove('text-gray-700');
+            }
+        }
+        // Scroll to section
+        function scrollToSection(sectionId) {
+            const element = document.getElementById(sectionId);
+            if (element) {
+                const offset = 80;
+                const elementPosition = element.offsetTop;
+                const offsetPosition = elementPosition - offset;
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth'
+                });
+            }
+            setActiveSection(sectionId);
+            closeMobileMenu();
+        }
+        // Mobile menu toggle
+        function toggleMobileMenu() {
+            isMenuOpen = !isMenuOpen;
+            const mobileMenu = document.getElementById('mobile-menu');
+            const menuIcon = document.getElementById('menu-icon');
+            const closeIcon = document.getElementById('close-icon');
+            if (isMenuOpen) {
+                mobileMenu.classList.remove('hidden');
+                menuIcon.classList.add('hidden');
+                closeIcon.classList.remove('hidden');
+            } else {
+                mobileMenu.classList.add('hidden');
+                menuIcon.classList.remove('hidden');
+                closeIcon.classList.add('hidden');
+            }
+        }
+        function closeMobileMenu() {
+            isMenuOpen = false;
+            const mobileMenu = document.getElementById('mobile-menu');
+            const menuIcon = document.getElementById('menu-icon');
+            const closeIcon = document.getElementById('close-icon');
+            mobileMenu.classList.add('hidden');
+            menuIcon.classList.remove('hidden');
+            closeIcon.classList.add('hidden');
+        }
+        // Event listeners
+        window.addEventListener('scroll', handleScroll);
+        document.getElementById('mobile-menu-btn').addEventListener('click', toggleMobileMenu);
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function () {
+            setActiveSection('profil');
+            handleScroll();
+        });
+        // Smooth animations on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('fade-in');
+                }
+            });
+        }, observerOptions);
+        // Observe all sections
+        document.addEventListener('DOMContentLoaded', function () {
+            const sections = document.querySelectorAll('section');
+            sections.forEach(section => {
+                observer.observe(section);
+            });
+        });
+
+        // Map functionality
+        let map;
+        let layerGroups = {
+            polygon: null,
+            polyline: null,
+            point: null
+        };
+        let activeLayers = [];
+        let featureElements = {};
+
+        function openMap() {
+            document.getElementById('mapContainer').classList.add('active');
+            document.body.style.overflow = 'hidden';
+            // Initialize map if not already initialized
+            if (!map) {
+                map = L.map('map').setView([-7.7956, 110.3695], 11);
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                }).addTo(map);
+            }
+            // Resize map after container is shown
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 100);
+        }
+
+        function closeMap() {
+            document.getElementById('mapContainer').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        function showLoadingSpinner(buttonId) {
+            const button = document.getElementById(buttonId);
+            const originalContent = button.innerHTML;
+            button.innerHTML = '<div class="loading-spinner"></div><span>Loading...</span>';
+            button.disabled = true;
+            return originalContent;
+        }
+
+        function hideLoadingSpinner(buttonId, originalContent) {
+            const button = document.getElementById(buttonId);
+            button.innerHTML = originalContent;
+            button.disabled = false;
+        }
+
+        async function toggleLayer(layerType) {
+            const buttonMap = {
+                'polygon': 'polygonBtn',
+                'polyline': 'polylineBtn',
+                'point': 'pointBtn'
+            };
+            const buttonId = buttonMap[layerType];
+            const button = document.getElementById(buttonId);
+            // Show loading spinner
+            const originalContent = showLoadingSpinner(buttonId);
+            try {
+                // If layer is already active, remove it
+                if (layerGroups[layerType]) {
+                    map.removeLayer(layerGroups[layerType]);
+                    layerGroups[layerType] = null;
+                    // Remove from active layers
+                    const index = activeLayers.indexOf(layerType);
+                    if (index > -1) {
+                        activeLayers.splice(index, 1);
+                    }
+                    button.classList.remove('active');
+                    return;
+                }
+                // Load data from local GeoJSON file
+                const fileMap = {
+                    'polygon': 'COBAAREA.geojson',
+                    'polyline': 'COBAJALAN.geojson',
+                    'point': 'COBATITIK.geojson'
+                };
+                const response = await fetch(fileMap[layerType]);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                // Create layer group
+                layerGroups[layerType] = L.geoJSON(data, {
+                    style: function (feature) {
+                        switch (layerType) {
+                            case 'polygon':
+                                return {
+                                    fillColor: '#22c55e',
+                                    weight: 2,
+                                    opacity: 1,
+                                    color: '#16a34a',
+                                    dashArray: '3',
+                                    fillOpacity: 0.3
+                                };
+                            case 'polyline':
+                                return {
+                                    color: '#3b82f6',
+                                    weight: 3,
+                                    opacity: 0.8
+                                };
+                            default:
+                                return {};
+                        }
+                    },
+                    pointToLayer: function (feature, latlng) {
+                        if (layerType === 'point') {
+                            return L.circleMarker(latlng, {
+                                radius: 8,
+                                fillColor: '#f97316',
+                                color: '#ea580c',
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.8
+                            });
+                        }
+                    },
+                    onEachFeature: function (feature, layer) {
+                        // === PERUBAHAN DI SINI ===
+                        // Konten popup sekarang mengambil nilai dari field 'NAMOBJ'.
+                        const namaObjek = feature.properties.NAMOBJ || 'Data tidak tersedia';
+                        let popupContent = `<div class="p-2"><h4 class="font-bold text-lg mb-2">${namaObjek}</h4></div>`;
+                        
+                        layer.bindPopup(popupContent);
+                        // ==========================
+
+                        // Ketika fitur diklik → tampilkan popup dan kedip merah
+                        layer.on('click', () => {
+                            layer.openPopup(); // Tampilkan popup
+                            blinkFeature(layer); // Kelip-kelip merah 3 detik
+                        });
+
+                        // Store layer reference by id
+                        if (feature.id) {
+                            featureElements[feature.id] = layer;
+                        }
+                    }
+                });
+                // Add layer to map
+                layerGroups[layerType].addTo(map);
+                activeLayers.push(layerType);
+                button.classList.add('active');
+                // Fit map to layer bounds if first layer
+                if (activeLayers.length === 1 && layerGroups[layerType].getBounds().isValid()) {
+                    map.fitBounds(layerGroups[layerType].getBounds(), { padding: [20, 20] });
+                }
+            } catch (error) {
+                console.error('Error loading layer:', error);
+                alert('Error loading layer data. Please check the console for details.');
+            } finally {
+                // Hide loading spinner
+                hideLoadingSpinner(buttonId, originalContent);
+            }
+        }
+
+        function zoomToFeature(featureId, layerType) {
+            if (!featureElements[featureId]) return;
+            const featureLayer = featureElements[featureId];
+            // Get bounds or center point
+            let bounds;
+            if (typeof featureLayer.getBounds === 'function') {
+                bounds = featureLayer.getBounds();
+            } else if (typeof featureLayer.getLatLng === 'function') {
+                const latlng = featureLayer.getLatLng();
+                bounds = L.latLngBounds([latlng, latlng]);
+            }
+            if (bounds && bounds.isValid()) {
+                // Delay zoom awal
+                setTimeout(() => {
+                    map.flyToBounds(bounds, {
+                        padding: [50, 50],
+                        duration: 1,
+                        easeLinearity: 0.25
+                    });
+                    // Setelah zoom selesai
+                    setTimeout(() => {
+                        // Tampilkan popup kecil
+                        featureLayer.openPopup();
+                        // Efek kelip kelip
+                        blinkFeature(featureLayer);
+                    }, 1000); // 1 detik setelah zoom
+                }, 300); // 0.3 detik sebelum mulai zoom
+            }
+        }
+
+        function blinkFeature(layer) {
+            const path = layer.getElement(); // SVG path
+            if (!path) return;
+            path.classList.add('blink-red');
+            setTimeout(() => {
+                path.classList.remove('blink-red');
+            }, 3000);
+        }
+
+    </script>
+</body>
+
+</html>

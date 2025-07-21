@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "COBATITIK",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "OBJECTID": 1, "KETERANGAN": null, "id": null }, "geometry": { "type": "Point", "coordinates": [ 110.178593671902888, -7.560662708176918 ] } },
+{ "type": "Feature", "properties": { "OBJECTID": 2, "KETERANGAN": null, "id": null }, "geometry": { "type": "Point", "coordinates": [ 110.17565974261251, -7.560680634102268 ] } }
+]
+}
